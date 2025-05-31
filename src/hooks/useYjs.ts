@@ -46,7 +46,7 @@ export function useYjs(roomName: string) {
 
   useEffect(() => {
     const ydoc = new Y.Doc()
-    const provider = new WebsocketProvider('ws://localhost:1234', roomName, ydoc)
+    const provider = new WebsocketProvider('wss://y-websocket-server-production.up.railway.app', roomName, ydoc)
 
     const yText = ydoc.getText('monaco')      // code editor content
     const yOutput = ydoc.getText('output')
