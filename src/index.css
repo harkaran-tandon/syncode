@@ -1,0 +1,10 @@
+@import "tailwindcss";
+
+.remote-cursor {
+    display: inline-block;
+    width: 2px;
+    background-color: red; /* fallback */
+    position: absolute;
+    z-index: 10;
+    height: 100%;
+  }
