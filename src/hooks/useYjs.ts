@@ -31,18 +31,7 @@ export function useYjs(roomName: string) {
   const yTextRef = useRef<Y.Text | null>(null)
   const yOutputRef = useRef<Y.Text | null>(null)
   const [ready, setReady] = useState(false)
-
-  // Awareness
-  const states = providerRef.current ? Array.from(providerRef.current.awareness.getStates().values()) : []
-  const connectedUsers = states.map((state: any) => state.user).filter(Boolean)
-
-  const user = useRef(() => {
-    const filteredNames = namesWithColors.filter(({ name }) => !connectedUsers.includes(name));
-    const randomUser = filteredNames.length > 0
-      ? filteredNames[Math.floor(Math.random() * filteredNames.length)]
-      : { name: "Anonymous", hex: "#cccccc" };
-    return { name: randomUser.name, color: randomUser.hex };
-  }).current;
+  const [user, setUser] = useState<{ name: string; color: string } | null>(null)
 
   useEffect(() => {
     const ydoc = new Y.Doc()
@@ -51,24 +40,61 @@ export function useYjs(roomName: string) {
     const yText = ydoc.getText('monaco')      // code editor content
     const yOutput = ydoc.getText('output')
 
-    provider.awareness.setLocalStateField('user', user)
-
-    provider.on('status', (event: { status: string }) => {
-      console.log(`[Yjs] ${event.status}`)
-    })
-
     ydocRef.current = ydoc
     providerRef.current = provider
     yTextRef.current = yText
     yOutputRef.current = yOutput
 
-    setReady(true)
+    function assignUser() {
+      // Get current connected user names from awareness states
+      const states = Array.from(provider.awareness.getStates().values())
+      const connectedNames = states.map((state: any) => state.user?.name).filter(Boolean)
+
+      // Filter names not taken
+      const availableNames = namesWithColors.filter(({ name }) => !connectedNames.includes(name))
+
+      if (availableNames.length > 0) {
+        // Pick random available name
+        const randomUser = availableNames[Math.floor(Math.random() * availableNames.length)]
+        setUser({ name: randomUser.name, color: randomUser.hex })
+        provider.awareness.setLocalStateField('user', { name: randomUser.name, color: randomUser.hex })
+      } else {
+        // Fallback anonymous user with random color
+        setUser({ name: "Anonymous", color: "#cccccc" })
+        provider.awareness.setLocalStateField('user', { name: "Anonymous", color: "#cccccc" })
+      }
+    }
+
+    // Wait for awareness connection before assigning user
+    provider.on('status', (event: { status: string }) => {
+      if (event.status === 'connected') {
+        assignUser()
+        setReady(true)
+      }
+    })
+
+    const onAwarenessReady = () => {
+      const hasSelf = provider.awareness.getLocalState()?.user
+      if (!hasSelf) assignUser()
+      setReady(true)
+    }
+    
+    // Wait until WebSocket is connected
+    if (provider.wsconnected) {
+      onAwarenessReady()
+    } else {
+      provider.on('status', (event: { status: string }) => {
+        if (event.status === 'connected') {
+          onAwarenessReady()
+        }
+      })
+    }
 
     return () => {
       provider.destroy()
       ydoc.destroy()
     }
-  }, [roomName, user])
+  }, [roomName])
 
   return {
     ydocRef,
@@ -76,5 +102,6 @@ export function useYjs(roomName: string) {
     yTextRef,
     yOutputRef,
     ready,
+    user,
   }
 }
